@@ -15,3 +15,13 @@ weights
 build
 data
 thirdparty
+bin
+*.run
+eigen-3.4.0.zip.1
+inspect_ckpt.py
+leapvo.egg-info/
+leapvo_traj.txt
+lib/
+lib64
+pyvenv.cfg
+train.py.bkp

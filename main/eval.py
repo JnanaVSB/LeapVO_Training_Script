@@ -5,6 +5,7 @@ import hydra
 import torch
 from omegaconf import DictConfig
 from tqdm import tqdm
+from omegaconf import OmegaConf
 
 from main.leapvo import LEAPVO
 from main.stream import dataset_stream, sintel_stream, video_stream
@@ -12,8 +13,13 @@ from main.utils import (eval_metrics, load_traj, plot_trajectory,
                         save_trajectory_tum_format, update_timestamps)
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="demo")
+
+
+@hydra.main(version_base=None, config_path="../configs", config_name="demo")
 def main(cfg: DictConfig):
+
+    # print("CFG TYPE:", type(cfg))
+    # print("CFG CONTENTS:\n", OmegaConf.to_yaml(cfg))
 
     slam = None
     skip = 0
@@ -74,20 +80,30 @@ def main(cfg: DictConfig):
                 cfg.data.gt_traj, cfg.data.traj_format, cfg.data.skip, cfg.data.stride
             )
 
+    from pathlib import Path
+
     if cfg.save_trajectory:
+        outdir = Path(cfg.output_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
+
         save_trajectory_tum_format(
-            pred_traj, f"{cfg.data.savedir}/{cfg.data.name}/leapvo_traj.txt"
+            pred_traj, str(outdir / "leapvo_traj.txt")
         )
 
     if cfg.save_video:
         slam.visualizer.save_video(filename=cfg.slam.PATCH_GEN)
+
+    from pathlib import Path
+
+    outdir = Path(cfg.output_dir) if cfg.output_dir else Path("./outputs")
+    outdir.mkdir(parents=True, exist_ok=True)
 
     if cfg.save_plot:
         plot_trajectory(
             pred_traj,
             gt_traj=gt_traj,
             title=f"LEAPVO Trajectory Prediction for {cfg.exp_name}",
-            filename=f"{cfg.data.savedir}/{cfg.data.name}/traj_plot.pdf",
+            filename=str(outdir / "traj_plot.pdf"),
         )
 
     if gt_traj is not None:

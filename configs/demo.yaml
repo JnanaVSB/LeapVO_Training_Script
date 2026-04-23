@@ -9,7 +9,16 @@ slam:
   PATCHES_PER_FRAME: 100
   BUFFER_SIZE: 1024
 
-  PATCH_GEN: grid_grad_10
+  PATCH_GEN: sam_sparse
+  SAM_MODEL_TYPE: vit_b
+  SAM_CHECKPOINT: weights/sam_vit_b_01ec64.pth
+  SAM_POINTS_PER_SIDE: 16
+  SAM_PRED_IOU_THRESH: 0.86
+  SAM_STABILITY_THRESH: 0.92
+  SAM_MIN_MASK_AREA: 100
+  SAM_MAX_MASKS: 24
+  SAM_POINTS_PER_MASK: 6
+  SAM_MIN_POINT_DISTANCE: 12
   
   ITER: 4
 
@@ -31,6 +40,7 @@ slam:
   num_init: 8
   backward_tracking: true
 
+  
 visualizer:
   save_dir: "./results"
   grayscale: false

@@ -6,7 +6,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-from moviepy.editor import ImageSequenceClip
+#from moviepy.editor import ImageSequenceClip
+from pathlib import Path
+import moviepy.editor as mpy
 
 
 def read_video_from_path(path):
@@ -41,7 +43,7 @@ class SLAMVisualizer:
         self.cfg = cfg.visualizer
         self.cfg_full = cfg
         self.mode = self.cfg.mode
-        self.save_dir = self.cfg.save_dir
+        self.save_dir = save_dir
         if save_dir is not None:
             self.save_dir = save_dir
 
@@ -452,25 +454,39 @@ class LEAPVisualizer(SLAMVisualizer):
 
         return res_video[None].byte()
 
-    def save_video(self, filename, writer=None, step=0):
-        video = self.draw_tracks_on_frames()
 
-        # export video
-        if writer is not None:
-            writer.add_video(
-                f"{filename}_pred_track",
-                video.to(torch.uint8),
-                global_step=step,
-                fps=self.fps,
-            )
-        else:
-            os.makedirs(self.save_dir, exist_ok=True)
-            wide_list = list(video.unbind(1))
-            wide_list = [wide[0].permute(1, 2, 0).cpu().numpy() for wide in wide_list]
-            clip = ImageSequenceClip(wide_list[2:-1], fps=self.fps)
 
-            # Write the video file
-            save_path = os.path.join(self.save_dir, f"{filename}_pred_track.mp4")
-            clip.write_videofile(save_path, codec="libx264", fps=self.fps, logger=None)
+    from pathlib import Path
+    import numpy as np
+    import torch
+    import moviepy.editor as mpy
 
-            print(f"Video saved to {save_path}")
+    def save_video(self, filename="pred_track"):
+        if len(self.frames) == 0:
+            print("No frames to save.")
+            return
+
+        processed_frames = []
+        for frame in self.frames:
+            if isinstance(frame, torch.Tensor):
+                frame = frame.detach().cpu().numpy()
+
+            # if CHW -> HWC
+            if frame.ndim == 3 and frame.shape[0] in [1, 3]:
+                frame = np.transpose(frame, (1, 2, 0))
+
+            # force uint8
+            if frame.dtype != np.uint8:
+                frame = np.clip(frame, 0, 255).astype(np.uint8)
+
+            processed_frames.append(frame)
+
+        clip = mpy.ImageSequenceClip(processed_frames, fps=self.fps)
+
+        outdir = Path(self.save_dir) if self.save_dir else Path("./outputs")
+        outdir.mkdir(parents=True, exist_ok=True)
+
+        save_path = outdir / f"{filename}_pred_track.mp4"
+        print(f"Saving video to {save_path}")
+
+        clip.write_videofile(str(save_path), codec="libx264", fps=self.fps, logger=None)

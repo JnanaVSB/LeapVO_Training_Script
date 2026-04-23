@@ -1,3 +1,5 @@
+export PYTHONPATH=$(pwd):$(pwd)/main:$PYTHONPATH
+
 DATASET=./data/Replica_Dataset
 SAVEDIR=logs/replica
 
