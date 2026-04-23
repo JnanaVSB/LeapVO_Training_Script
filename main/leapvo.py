@@ -14,6 +14,7 @@ from main.backend.ba import BA
 from main.backend.lietorch import SE3
 from main.leap.leap_kernel import LeapKernel
 from main.slam_visualizer import LEAPVisualizer
+from main.sam_point_selector import SAMPointSelector
 
 
 def flatmeshgrid(*args, **kwargs):
@@ -90,6 +91,8 @@ class LEAPVO:
 
         self.local_window = []
 
+
+
         # store relative poses for removed frames
         self.delta = {}
 
@@ -105,7 +108,7 @@ class LEAPVO:
         self.kf_stride = cfg.slam.kf_stride
         self.interp_shape = (384, 512)
 
-        save_dir = f"{cfg.data.savedir}/{cfg.data.name}"
+        save_dir = cfg.output_dir if "output_dir" in cfg and cfg.output_dir else "./outputs"
 
         self.use_forward = cfg.slam.use_forward if "use_forward" in cfg.slam else True
         self.use_backward = (
@@ -113,6 +116,21 @@ class LEAPVO:
         )
 
         self.visualizer = LEAPVisualizer(cfg, save_dir=save_dir)
+
+        self.sam_selector = None
+        if self.cfg.slam.PATCH_GEN == "sam_sparse":
+            self.sam_selector = SAMPointSelector(
+                model_type=self.cfg.slam.SAM_MODEL_TYPE,
+                checkpoint=self.cfg.slam.SAM_CHECKPOINT,
+                device="cuda",
+                points_per_side=self.cfg.slam.SAM_POINTS_PER_SIDE,
+                pred_iou_thresh=self.cfg.slam.SAM_PRED_IOU_THRESH,
+                stability_score_thresh=self.cfg.slam.SAM_STABILITY_THRESH,
+                min_mask_region_area=self.cfg.slam.SAM_MIN_MASK_AREA,
+                max_masks=self.cfg.slam.SAM_MAX_MASKS,
+                points_per_mask=self.cfg.slam.SAM_POINTS_PER_MASK,
+                min_point_distance=self.cfg.slam.SAM_MIN_POINT_DISTANCE,
+            )
 
     @property
     def poses(self):
@@ -186,15 +204,19 @@ class LEAPVO:
             y = torch.randint(1, self.ht - 1, size=[1, self.M], device="cuda")
             coords = torch.stack([x, y], dim=-1).float()
 
+        elif self.cfg.slam.PATCH_GEN == "sam_sparse":
+            # image is expected to be (3, H, W)
+            # selector returns (1, M, 2) in (x, y)
+            coords = self.sam_selector.select_points(image, self.M).float()
+
         elif "grid_grad" in self.cfg.slam.PATCH_GEN:
             rel_margin = 0.15
             num_expand = 8
-
             grid_size = int(self.cfg.slam.PATCH_GEN.split("_")[-1])
             num_grid = grid_size * grid_size
             grid_M = self.M // num_grid
-            H_grid, W_grid = self.ht // grid_size, self.wd // grid_size
 
+            H_grid, W_grid = self.ht // grid_size, self.wd // grid_size
             g = self.__image_gradient_2(self.local_window[-1][None, None, ...])
 
             x = (
@@ -207,43 +229,47 @@ class LEAPVO:
                 * (1 - 2 * rel_margin)
                 + rel_margin
             )
-            # map to coordinate
-            offset = torch.linspace(0, grid_size - 1, grid_size)
-            offset_y, offset_x = torch.meshgrid(offset, offset)
-            offset = torch.stack([offset_x, offset_y], dim=-1).to("cuda")
-            offset = offset.view(-1, 2)
+
+            offset = torch.linspace(0, grid_size - 1, grid_size, device="cuda")
+            offset_y, offset_x = torch.meshgrid(offset, offset, indexing="ij")
+            offset = torch.stack([offset_x, offset_y], dim=-1).view(-1, 2)
             offset[..., 0] = offset[..., 0] * W_grid
             offset[..., 1] = offset[..., 1] * H_grid
 
             x_global = x.view(1, num_grid, -1) * W_grid + offset[..., 0].view(1, -1, 1)
             y_global = y.view(1, num_grid, -1) * H_grid + offset[..., 1].view(1, -1, 1)
 
-            coords = torch.stack([x_global, y_global], dim=-1).float()  ## [1, N, 2]
-            coords = rearrange(coords, "b g n c -> b (g n) c")
-            coords = torch.round(coords).unsqueeze(1)
-            coords_norm = coords
+            coords_candidates = torch.stack([x_global, y_global], dim=-1).float()
+            coords_candidates = rearrange(coords_candidates, "b g n c -> b (g n) c")
+            coords_norm = torch.round(coords_candidates).unsqueeze(1).clone()
+
             coords_norm[..., 0] = coords_norm[..., 0] / (self.wd - 1) * 2.0 - 1.0
-            coords_norm[..., 1] = coords_norm[..., 0] / (self.ht - 1) * 2.0 - 1.0
+            coords_norm[..., 1] = coords_norm[..., 1] / (self.ht - 1) * 2.0 - 1.0  # FIXED
 
             gg = F.grid_sample(g, coords_norm, mode="bilinear", align_corners=True)
             gg = gg[:, 0, 0]
             gg = rearrange(gg, "b (ng n) -> b ng n", ng=num_grid)
+
             ix = torch.argsort(gg, dim=-1)
             x_global = torch.gather(x_global, 2, ix[:, :, -grid_M:])
             y_global = torch.gather(y_global, 2, ix[:, :, -grid_M:])
-            coords = torch.concat([x_global, y_global], dim=-1).float()
+            coords = torch.cat([x_global, y_global], dim=-1).float()
 
+        else:
+            raise ValueError(f"Unknown PATCH_GEN: {self.cfg.slam.PATCH_GEN}")
+
+        # common code for all patch generators
         disps = torch.ones(B, 1, self.ht, self.wd, device="cuda")
         grid, _ = coords_grid_with_index(disps, device=self.poses_.device)
+
         patches = altcorr.patchify(grid[0], coords, self.P // 2).view(
             B, -1, 3, self.P, self.P
-        )  # B, N, 3, p, p
-
+        )
         clr = altcorr.patchify(image.unsqueeze(0).float(), (coords + 0.5), 0).view(
             B, -1, 3
         )
 
-        return patches, clr
+        return patches, clr 
 
     def map_point_filtering(self):
         coords = self.reproject()[..., self.P // 2, self.P // 2]
