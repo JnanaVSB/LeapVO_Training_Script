@@ -10,7 +10,7 @@
 
 NUM_SEQ=${1:-2000}
 START_ID=${2:-0}
-OUTPUT_DIR="/home/jnana/ASU/PIR/leapvo_training/training_dataset"
+OUTPUT_DIR="/home/jnana/ASU/PIR/leapvo_training/validation_dataset"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 mkdir -p "$OUTPUT_DIR"

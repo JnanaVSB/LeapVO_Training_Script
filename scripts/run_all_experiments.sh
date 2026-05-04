@@ -19,7 +19,7 @@ SINTEL_DATASET=./data/MPI-Sintel-complete/training
 SINTEL_SCENES="alley_2 ambush_4 ambush_5 ambush_6 cave_2 cave_4 market_2 market_5 market_6 shaman_3 sleeping_1 sleeping_2 temple_2 temple_3"
 
 for RUN in $(seq 1 $NUM_RUNS); do
-    SAVEDIR=logs_SAM/sintel/run_${RUN}
+    SAVEDIR=V3_logs/sintel/run_${RUN}
     mkdir -p $SAVEDIR
     echo ""
     echo ">>> SINTEL Run $RUN / $NUM_RUNS  [$(date)]"
@@ -49,7 +49,7 @@ SHIBUYA_DATASET=./data/TartanAir_shibuya
 SHIBUYA_SCENES="Standing01 Standing02 RoadCrossing03 RoadCrossing04 RoadCrossing05 RoadCrossing06 RoadCrossing07"
 
 for RUN in $(seq 1 $NUM_RUNS); do
-    SAVEDIR=logs_SAM/shibuya/run_${RUN}
+    SAVEDIR=V3_logs/shibuya/run_${RUN}
     mkdir -p $SAVEDIR
     echo ""
     echo ">>> SHIBUYA Run $RUN / $NUM_RUNS  [$(date)]"
@@ -78,7 +78,7 @@ REPLICA_DATASET=./data/Replica_Dataset
 REPLICA_SCENES="office_0 office_1 office_2 office_3 office_4 room_0 room_1 room_2"
 
 for RUN in $(seq 1 $NUM_RUNS); do
-    SAVEDIR=logs_SAM/replica/run_${RUN}
+    SAVEDIR=V3_logs/replica/run_${RUN}
     mkdir -p $SAVEDIR
     echo ""
     echo ">>> REPLICA Run $RUN / $NUM_RUNS  [$(date)]"

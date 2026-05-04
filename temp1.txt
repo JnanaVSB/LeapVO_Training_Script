@@ -1,3 +1,7 @@
+conda activate leapvo
+
+tensorboard --logdir ~/ASU/PIR/leapvo_training/training_results/baseline/tb_logs --port 6006
+
 (leapvo) jnana@jnana-Legion-Pro-7-16IRX9H:~/ASU/PIR/leapvo_training/leapvo$ kill 3950180 3950720
 
 cd ~/ASU/PIR/leapvo_training/leapvo
@@ -112,3 +116,21 @@ nohup python3 train.py \
     > ~/ASU/PIR/leapvo_training/logs/trunc_both.log 2>&1 &
 echo "TRUNC PID: $!"
 
+PYTHONPATH=~/ASU/PIR/leapvo_training/leapvo/main \
+nohup python3 train.py \
+    --dataset_root ~/ASU/PIR/leapvo_training/training_dataset \
+    --val_dataset_root ~/ASU/PIR/leapvo_training/validation_dataset \
+    --run_name baseline \
+    --loss_vis bce --loss_dyn bce \
+    --num_steps 50000 \
+    --num_workers 4 \
+    --num_anchors 64 --num_tracks 128 \
+    --grad_accum_steps 1 \
+    --log_every 50 --save_every 2000 \
+    --val_every 2000 --val_max_batches 200 --val_workers 2 \
+    --pretrained_fnet ~/ASU/PIR/leapvo_training/pretrained/cotracker_stride_4_wind_8.pth \
+    --ckpt_path ~/ASU/PIR/leapvo_training/training_results \
+    > ~/ASU/PIR/leapvo_training/training_results/baseline/baseline.log 2>&1 &
+echo "Baseline PID: $!"
+
+tail -f ~/ASU/PIR/leapvo_training/training_results/baseline/baseline.log
